@@ -1,0 +1,273 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  #wapp { padding: 1rem 0; font-family: var(--font-mono, monospace); color: var(--color-text-primary); }
+  .title { font-size: 20px; font-weight: 500; letter-spacing: 2px; margin-bottom: 2px; }
+  .subtitle { font-size: 11px; color: var(--color-text-secondary); margin-bottom: 1rem; letter-spacing: 1px; }
+  .msg-bar { background: var(--color-background-secondary); border: 1.5px solid var(--color-border-secondary); border-radius: 8px; padding: 9px 14px; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 12px; min-height: 34px; }
+  .game-layout { display: grid; grid-template-columns: 1fr 200px; gap: 14px; }
+
+  /* ── CAVE GRID ── */
+  .cave-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 2.5px solid var(--color-border-primary); border-radius: 8px; overflow: hidden; }
+  .cell {
+    aspect-ratio: 1;
+    border-right: 1.5px solid var(--color-border-secondary);
+    border-bottom: 1.5px solid var(--color-border-secondary);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; position: relative;
+    background: var(--color-background-primary);
+    transition: background 0.12s;
+  }
+  .cell:nth-child(4n)   { border-right: none; }
+  .cell:nth-child(n+13) { border-bottom: none; }
+  .cell:hover { background: var(--color-background-secondary); }
+  .cell.unknown  { background: var(--color-background-tertiary); }
+  .cell.visited  { background: var(--color-background-primary); }
+  .cell.current  { background: #E6F1FB; border-color: #378ADD; }
+  .cell.dead     { background: #FCEBEB; }
+  .cell.won-cell { background: #EAF3DE; }
+
+  .cell-num  { font-size: 9px; color: var(--color-text-tertiary); position: absolute; top: 3px; left: 5px; font-weight: 500; }
+  .cell-icon { font-size: 20px; line-height: 1; }
+  .cell-clues{ font-size: 9px; position: absolute; bottom: 3px; text-align: center; line-height: 1.3; }
+
+  /* ── PANEL ── */
+  .panel { display: flex; flex-direction: column; gap: 10px; }
+  .box { background: var(--color-background-secondary); border: 1.5px solid var(--color-border-secondary); border-radius: 8px; padding: 10px 12px; }
+  .box-title { font-size: 10px; color: var(--color-text-secondary); font-weight: 500; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 7px; }
+  .mode-row { display: flex; gap: 6px; }
+  .mbtn { flex:1; padding:5px; border-radius:5px; border:1.5px solid var(--color-border-secondary); background:transparent; color:var(--color-text-secondary); font-size:11px; cursor:pointer; font-family:var(--font-mono); }
+  .mbtn.active { background:#E6F1FB; border-color:#378ADD; color:#185FA5; }
+  .mode-hint { font-size:10px; color:var(--color-text-tertiary); margin-top:5px; }
+  .stat-row { display:flex; justify-content:space-between; font-size:12px; padding:3px 0; border-bottom:0.5px solid var(--color-border-tertiary); }
+  .stat-row:last-child { border-bottom:none; }
+  .stat-val { font-weight:500; }
+  .log { max-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:3px; }
+  .le { font-size:11px; color:var(--color-text-secondary); line-height:1.4; padding:2px 0; border-bottom:0.5px solid var(--color-border-tertiary); }
+  .le.w { color:#BA7517; } .le.d { color:#A32D2D; } .le.s { color:#3B6D11; }
+  .legend-grid { display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; }
+  .li { display:flex; align-items:center; gap:4px; font-size:10px; color:var(--color-text-secondary); }
+  .li span { font-size:13px; }
+
+  /* ── NEIGHBOR BUTTONS ── */
+  .nbr-wrap { margin-top:10px; }
+  .nbr-label { font-size:10px; color:var(--color-text-secondary); margin-bottom:5px; letter-spacing:1px; text-transform:uppercase; }
+  .nbr-row { display:flex; gap:5px; flex-wrap:wrap; }
+  .nbr-btn { border:1.5px solid var(--color-border-secondary); background:var(--color-background-secondary); color:var(--color-text-primary); padding:5px 12px; border-radius:5px; font-size:11px; cursor:pointer; font-family:var(--font-mono); transition:background 0.1s; }
+  .nbr-btn:hover { background:var(--color-background-info); border-color:var(--color-border-info); color:var(--color-text-info); }
+  .nbr-btn.shoot-mode { border-color:#993C1D; color:#993C1D; }
+  .nbr-btn.shoot-mode:hover { background:#FAECE7; }
+  .new-btn { width:100%; padding:7px; border:1.5px solid var(--color-border-secondary); background:transparent; color:var(--color-text-primary); border-radius:6px; font-size:12px; cursor:pointer; font-family:var(--font-mono); }
+  .new-btn:hover { background:var(--color-background-secondary); }
+</style>
+
+<div id="wapp">
+  <h2 class="sr-only">Hunt the Wumpus interactive game</h2>
+  <div class="title">HUNT THE WUMPUS</div>
+  <div class="subtitle">AI ASSIGNMENT — KNOWLEDGE-BASED AGENT SIMULATION</div>
+  <div id="msg" class="msg-bar">You wake in a dark cave. Move carefully or shoot!</div>
+
+  <div class="game-layout">
+    <div>
+      <div class="cave-grid" id="grid"></div>
+      <div class="nbr-wrap">
+        <div class="nbr-label" id="nbr-label">Move to adjacent room:</div>
+        <div class="nbr-row" id="nbr-row"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="box">
+        <div class="box-title">Mode</div>
+        <div class="mode-row">
+          <button class="mbtn active" id="btn-move" onclick="setMode('move')">Move</button>
+          <button class="mbtn" id="btn-shoot" onclick="setMode('shoot')">🏹 Shoot</button>
+        </div>
+        <div class="mode-hint" id="mode-hint">Click a neighbor to move.</div>
+      </div>
+      <div class="box">
+        <div class="box-title">Status</div>
+        <div class="stat-row"><span>Room</span><span class="stat-val" id="s-room">1</span></div>
+        <div class="stat-row"><span>Arrows</span><span class="stat-val" id="s-arrows">3</span></div>
+        <div class="stat-row"><span>Moves</span><span class="stat-val" id="s-moves">0</span></div>
+        <div class="stat-row"><span>Gold</span><span class="stat-val" id="s-gold">Not found</span></div>
+        <div class="stat-row"><span>Wumpus</span><span class="stat-val" id="s-wumpus">Alive</span></div>
+      </div>
+      <div class="box">
+        <div class="box-title">Perception Log</div>
+        <div class="log" id="log"></div>
+      </div>
+      <div class="box">
+        <div class="box-title">Legend</div>
+        <div class="legend-grid">
+          <div class="li"><span>🧭</span>You</div>
+          <div class="li"><span>👾</span>Wumpus</div>
+          <div class="li"><span>🕳️</span>Pit</div>
+          <div class="li"><span>💰</span>Gold</div>
+          <div class="li"><span>🦨</span>Stench</div>
+          <div class="li"><span>💨</span>Breeze</div>
+          <div class="li"><span>✨</span>Glitter</div>
+          <div class="li"><span>❓</span>Unknown</div>
+        </div>
+      </div>
+      <button class="new-btn" onclick="initGame()">↺ New Game</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const N=4, T=16;
+let G={}, mode='move';
+
+function adj(r){
+  const a=[];
+  if(r%N!==0) a.push(r-1);
+  if(r%N!==N-1) a.push(r+1);
+  if(r-N>=0) a.push(r-N);
+  if(r+N<T) a.push(r+N);
+  return a;
+}
+
+function randFrom(arr, excl=[]){
+  const pool=arr.filter(x=>!excl.includes(x));
+  return pool[Math.floor(Math.random()*pool.length)];
+}
+
+function initGame(){
+  const start=0;
+  const safeZone=[start,...adj(start)];
+  const pool=Array.from({length:T},(_,i)=>i).filter(x=>!safeZone.includes(x));
+  const wumpus=randFrom(pool);
+  const gold=randFrom(pool,[wumpus]);
+  const pit1=randFrom(pool,[wumpus,gold]);
+  const pit2=randFrom(pool,[wumpus,gold,pit1]);
+  G={player:start, wumpus, gold, pits:[pit1,pit2].filter(Boolean),
+     hasGold:false, wumpusDead:false, visited:new Set([start]),
+     arrows:3, moves:0, alive:true, won:false};
+  mode='move';
+  document.getElementById('btn-move').classList.add('active');
+  document.getElementById('btn-shoot').classList.remove('active');
+  document.getElementById('mode-hint').textContent='Click a neighbor to move.';
+  document.getElementById('s-wumpus').textContent='Alive';
+  document.getElementById('s-wumpus').style.color='';
+  document.getElementById('s-gold').textContent='Not found';
+  document.getElementById('log').innerHTML='';
+  setMsg('You wake in a dark cave. Move carefully or shoot!');
+  render(); perceive();
+}
+
+function perceive(){
+  if(!G.alive||G.won) return;
+  const r=G.player, nb=adj(r), msgs=[];
+  if(!G.wumpusDead && nb.includes(G.wumpus)) msgs.push({t:'🦨 You smell a stench!',c:'w'});
+  if(G.pits.some(p=>nb.includes(p))) msgs.push({t:'💨 You feel a breeze!',c:'w'});
+  if(r===G.gold && !G.hasGold) msgs.push({t:'✨ You see glitter!',c:'s'});
+  if(G.hasGold && r===0) msgs.push({t:'🏆 Exit with the gold!',c:'s'});
+  if(!msgs.length) msgs.push({t:'🌿 All quiet here.',c:''});
+  msgs.forEach(m=>addLog(`Room ${r+1}: ${m.t}`,m.c));
+  if(r===G.gold && !G.hasGold){
+    G.hasGold=true;
+    document.getElementById('s-gold').textContent='Collected!';
+    addLog('💰 Gold grabbed! Return to Room 1!','s');
+  }
+  if(G.hasGold && r===0){
+    G.won=true; setMsg('🏆 YOU WIN! Escaped with the gold!'); render();
+  }
+}
+
+function doMove(to){
+  if(!G.alive||G.won||!adj(G.player).includes(to)) return;
+  G.player=to; G.visited.add(to); G.moves++;
+  if(!G.wumpusDead && to===G.wumpus){
+    G.alive=false; addLog('👾 The Wumpus ate you! GAME OVER.','d');
+    setMsg('💀 You were eaten by the Wumpus! Press New Game.');
+    render(); return;
+  }
+  if(G.pits.includes(to)){
+    G.alive=false; addLog('🕳️ You fell into a pit! GAME OVER.','d');
+    setMsg('💀 Fell into a bottomless pit! Press New Game.');
+    render(); return;
+  }
+  render(); perceive();
+}
+
+function doShoot(to){
+  if(!G.alive||G.won||!adj(G.player).includes(to)) return;
+  G.arrows--;
+  if(!G.wumpusDead && to===G.wumpus){
+    G.wumpusDead=true;
+    addLog('🎯 Arrow struck the Wumpus! It is dead!','s');
+    setMsg('🎯 Wumpus slain! Now find the gold and escape!');
+    document.getElementById('s-wumpus').textContent='Dead';
+    document.getElementById('s-wumpus').style.color='var(--color-text-success)';
+  } else {
+    addLog(`🏹 Arrow missed! (${G.arrows} left)`,'w');
+    if(G.arrows<=0){G.alive=false;addLog('💀 No arrows left. GAME OVER.','d');setMsg('💀 Out of arrows! Game Over.');}
+  }
+  render();
+}
+
+function setMode(m){
+  mode=m;
+  document.getElementById('btn-move').classList.toggle('active',m==='move');
+  document.getElementById('btn-shoot').classList.toggle('active',m==='shoot');
+  document.getElementById('mode-hint').textContent=m==='move'?'Click a neighbor to move.':'Click a neighbor to shoot there.';
+  renderNbr();
+}
+
+function render(){
+  const g=document.getElementById('grid'); g.innerHTML='';
+  for(let i=0;i<T;i++){
+    const c=document.createElement('div');
+    c.className='cell';
+    const vis=G.visited.has(i);
+    if(i===G.player) c.classList.add(G.won?'won-cell':G.alive?'current':'dead');
+    else if(vis) c.classList.add('visited');
+    else c.classList.add('unknown');
+
+    const num=document.createElement('div'); num.className='cell-num'; num.textContent=i+1; c.appendChild(num);
+    const ico=document.createElement('div'); ico.className='cell-icon';
+    ico.textContent = i===G.player ? (G.won?'🏆':G.alive?'🧭':'💀') : (vis?'·':'❓');
+    c.appendChild(ico);
+
+    if(vis && i!==G.player){
+      const nb=adj(i);
+      const st=!G.wumpusDead&&nb.includes(G.wumpus);
+      const br=G.pits.some(p=>nb.includes(p));
+      const gl=i===G.gold&&!G.hasGold;
+      if(st||br||gl){
+        const cl=document.createElement('div'); cl.className='cell-clues';
+        cl.textContent=[st?'🦨':'',br?'💨':'',gl?'✨':''].filter(Boolean).join(' ');
+        c.appendChild(cl);
+      }
+    }
+    g.appendChild(c);
+  }
+  document.getElementById('s-room').textContent=`Room ${G.player+1}`;
+  document.getElementById('s-arrows').textContent=G.arrows;
+  document.getElementById('s-moves').textContent=G.moves;
+  renderNbr();
+}
+
+function renderNbr(){
+  const row=document.getElementById('nbr-row'); row.innerHTML='';
+  const lbl=document.getElementById('nbr-label');
+  if(!G.alive||G.won){lbl.textContent='Game Over'; return;}
+  lbl.textContent=mode==='shoot'?'Shoot into room:':'Move to adjacent room:';
+  adj(G.player).forEach(n=>{
+    const b=document.createElement('button');
+    b.className='nbr-btn'+(mode==='shoot'?' shoot-mode':'');
+    b.textContent=(mode==='shoot'?'🏹 ':'→ ')+`Room ${n+1}`;
+    b.onclick=()=>mode==='shoot'?doShoot(n):doMove(n);
+    row.appendChild(b);
+  });
+}
+
+function addLog(t,c=''){
+  const log=document.getElementById('log');
+  const d=document.createElement('div'); d.className='le'+(c?' '+c:''); d.textContent=t;
+  log.insertBefore(d,log.firstChild);
+}
+function setMsg(m){document.getElementById('msg').textContent=m;}
+
+initGame();
+</script>
